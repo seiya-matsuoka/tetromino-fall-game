@@ -1,1 +1,16 @@
 @import 'tailwindcss';
+
+@theme {
+  /* 画面の最下層 */
+  --color-bg: #0b1a2a;
+  /* 盤面などの面 */
+  --color-surface: #0f2238;
+  /* サイド/ボタンの面 */
+  --color-panel: #132b46;
+  /* ボーダー */
+  --color-border: #ffffff22;
+  /* 文字色（明） */
+  --color-fg: #e5e7eb;
+  /* 補助テキスト */
+  --color-muted: #9aa7b4;
+}
