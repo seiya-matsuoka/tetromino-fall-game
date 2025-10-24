@@ -1,3 +1,6 @@
+import type { Mino, ActivePiece } from './types';
+import { SevenBag } from './sevenBag';
+
 /**
  * ゲーム状態ストア
  *
@@ -19,17 +22,6 @@ export const ROWS = VISIBLE_ROWS + HIDDEN_ROWS;
 
 /** 1マスの値：0 は空。1..7 はミノID */
 export type Cell = 0 | number;
-
-/** ミノ種別 */
-export type Mino = 'I' | 'O' | 'T' | 'L' | 'J' | 'S' | 'Z';
-
-/** 操作中ピース */
-export interface ActivePiece {
-  type: Mino;
-  x: number; // 左上を0,0
-  y: number; // 上に行くほど小さい（0は天井最上段）
-  rot: 0 | 1 | 2 | 3; // 0=北, 1=東, 2=南, 3=西
-}
 
 /** ゲーム状態の全体像 */
 export interface GameState {
@@ -75,9 +67,9 @@ export interface Store {
 
   setActive(piece: ActivePiece | null): void;
 
-  setNextQueue(q: Mino[]): void; // 丸ごと置換
-  shiftNext(): Mino | undefined; // 先頭を取り出し
-  pushNext(mino: Mino): void; // 末尾に追加
+  // NEXT（7バッグ連動）
+  seedNext(count?: number): void; // 起動時に最低3つ分シード
+  consumeNext(): Mino; // 先頭を返し、末尾を袋から補充
 }
 
 /* ---------- 内部ヘルパ ---------- */
@@ -109,7 +101,23 @@ export function createStore(): Store {
 
   const listeners = new Set<(s: Readonly<GameState>) => void>();
 
-  // ここから下はAPI実装
+  // 7バッグをストア内部に保持
+  const bag = new SevenBag();
+
+  function emit() {
+    const snapshot = state;
+    listeners.forEach((fn) => fn(snapshot));
+  }
+
+  // NEXTがcount以上になるまで袋から補充
+  function ensureNext(count = 3) {
+    if (state.nextQueue.length >= count) return;
+    const need = count - state.nextQueue.length;
+    const add: Mino[] = [];
+    for (let i = 0; i < need; i++) add.push(bag.next());
+    state = { ...state, nextQueue: [...state.nextQueue, ...add] };
+  }
+
   const api: Store = {
     getState: () => state,
 
@@ -121,6 +129,8 @@ export function createStore(): Store {
 
     reset() {
       state = initialState();
+      // リセット後もNEXTを3つにシード
+      ensureNext(3);
       emit();
     },
 
@@ -173,29 +183,24 @@ export function createStore(): Store {
       emit();
     },
 
-    setNextQueue(q) {
-      state = { ...state, nextQueue: q.slice() };
+    seedNext(count = 3) {
+      ensureNext(count);
       emit();
     },
 
-    shiftNext() {
-      if (state.nextQueue.length === 0) return undefined;
+    consumeNext() {
+      // 先頭を取り出す → 末尾を袋から補充 → NEXT3を維持
+      if (state.nextQueue.length === 0) ensureNext(1);
       const [head, ...rest] = state.nextQueue;
       state = { ...state, nextQueue: rest };
+      ensureNext(3);
       emit();
-      return head;
-    },
-
-    pushNext(mino) {
-      state = { ...state, nextQueue: [...state.nextQueue, mino] };
-      emit();
+      return head!;
     },
   };
 
-  function emit() {
-    const snapshot = state;
-    listeners.forEach((fn) => fn(snapshot));
-  }
+  // 初回シード（NEXT3）
+  api.seedNext(3);
 
   return api;
 }
