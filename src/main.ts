@@ -1,6 +1,7 @@
 import './style.css';
 import { GameLoop } from './core/loop';
 import { createStore } from './core/store';
+import type { Mino } from './core/types';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -64,12 +65,157 @@ const ui = {
   score: document.getElementById('score')!,
   level: document.getElementById('level')!,
   pauseBtn: document.getElementById('pauseBtn')!,
+  nextCanvases: [
+    document.getElementById('next0') as HTMLCanvasElement,
+    document.getElementById('next1') as HTMLCanvasElement,
+    document.getElementById('next2') as HTMLCanvasElement,
+  ],
 };
 
+// ----- NEXT描画ユーティリティ -----
+
+// 4x4 のビットマップで北向きの形を定義（1=ブロックあり, 0=なし）
+const SHAPES: Record<Mino, number[][]> = {
+  I: [
+    [0, 0, 0, 0],
+    [1, 1, 1, 1],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+  O: [
+    [0, 1, 1, 0],
+    [0, 1, 1, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+  T: [
+    [0, 1, 0, 0],
+    [1, 1, 1, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+  L: [
+    [0, 0, 1, 0],
+    [1, 1, 1, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+  J: [
+    [1, 0, 0, 0],
+    [1, 1, 1, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+  S: [
+    [0, 1, 1, 0],
+    [1, 1, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+  Z: [
+    [1, 1, 0, 0],
+    [0, 1, 1, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ],
+};
+
+const COLORS: Record<Mino, string> = {
+  I: '#22d3ee', // cyan
+  O: '#facc15', // yellow
+  T: '#a78bfa', // purple
+  L: '#fb923c', // orange
+  J: '#60a5fa', // blue
+  S: '#34d399', // green
+  Z: '#f87171', // red
+};
+
+function drawNextBox(cv: HTMLCanvasElement, type: Mino | undefined) {
+  // ディスプレイ倍率に対応
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  const css = Math.min(Math.floor(rect.width), Math.floor(rect.height)); // 正方形にそろえる
+
+  // CSSサイズと実ピクセル（width/height属性）を同期
+  cv.style.width = `${css}px`;
+  cv.style.height = `${css}px`;
+  cv.width = Math.floor(css * dpr);
+  cv.height = Math.floor(css * dpr);
+
+  const c = cv.getContext('2d')!;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // 背景クリア
+  c.clearRect(0, 0, css, css);
+
+  if (!type) return;
+
+  const shape = SHAPES[type];
+
+  // 1マスのサイズ
+  const cell = Math.floor(css / 5); // 余白をとる
+  const padding = Math.floor((css - cell * 4) / 2);
+
+  // 形のバウンディングを計算して中央寄せ
+  let minX = 4,
+    maxX = -1,
+    minY = 4,
+    maxY = -1;
+  for (let y = 0; y < 4; y++)
+    for (let x = 0; x < 4; x++) {
+      if (shape[y][x]) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  const wCells = maxX - minX + 1;
+  const hCells = maxY - minY + 1;
+
+  const offsetX = padding + Math.floor((4 - wCells) * 0.5) * cell - minX * cell;
+  const offsetY = padding + Math.floor((4 - hCells) * 0.5) * cell - minY * cell;
+
+  // 角丸の四角で各セルを描く
+  c.fillStyle = COLORS[type];
+  for (let y = 0; y < 4; y++)
+    for (let x = 0; x < 4; x++) {
+      if (!shape[y][x]) continue;
+      const px = offsetX + x * cell;
+      const py = offsetY + y * cell;
+      const r = Math.max(2, Math.floor(cell * 0.15)); // 角丸半径：セルサイズに比例
+      roundRect(c, px, py, cell - 1, cell - 1, r);
+      c.fill();
+    }
+}
+
+/** 角丸の矩形パスを作るヘルパー */
+function roundRect(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+// スコア/レベル/ポーズ表示を同期し、NEXT3を描く
 store.subscribe((s) => {
   ui.score.textContent = String(s.score);
   ui.level.textContent = String(s.level);
   ui.pauseBtn.textContent = s.paused ? '▶' : '⏸';
+
+  for (let i = 0; i < ui.nextCanvases.length; i++) {
+    drawNextBox(ui.nextCanvases[i], s.nextQueue[i]);
+  }
 });
 
 // --- ゲームループ（固定タイムステップ） ---
@@ -84,11 +230,15 @@ function render(_alpha: number) {
 
 const loop = new GameLoop(update, render, 1 / 60);
 
-// ポーズ切替をストア主導に
 ui.pauseBtn.addEventListener('click', () => {
-  store.setPaused(!store.getState().paused);
-  if (store.getState().paused) loop.stop();
-  else loop.start();
+  const paused = store.getState().paused;
+  if (paused) {
+    store.setPaused(false);
+    loop.start();
+  } else {
+    store.setPaused(true);
+    loop.stop();
+  }
 });
 
 // タブ非表示/復帰
