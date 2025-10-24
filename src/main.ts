@@ -1,5 +1,6 @@
 import './style.css';
 import { GameLoop } from './core/loop';
+import { createStore } from './core/store';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -54,6 +55,23 @@ function drawGrid() {
   }
 }
 
+// ----- ストア -----
+const store = createStore();
+
+// UI反映：スコア/レベル
+const ui = {
+  highScore: document.getElementById('highScore')!,
+  score: document.getElementById('score')!,
+  level: document.getElementById('level')!,
+  pauseBtn: document.getElementById('pauseBtn')!,
+};
+
+store.subscribe((s) => {
+  ui.score.textContent = String(s.score);
+  ui.level.textContent = String(s.level);
+  ui.pauseBtn.textContent = s.paused ? '▶' : '⏸';
+});
+
 // --- ゲームループ（固定タイムステップ） ---
 function update(_dt: number) {
   // まだゲームロジックなし
@@ -66,23 +84,22 @@ function render(_alpha: number) {
 
 const loop = new GameLoop(update, render, 1 / 60);
 
-// UI: ポーズボタンで start/stop
-const pauseBtn = document.getElementById('pauseBtn')!;
-function setPaused(paused: boolean) {
-  if (paused) {
-    loop.stop();
-    pauseBtn.textContent = '▶';
-  } else {
-    loop.start();
-    pauseBtn.textContent = '⏸';
-  }
-}
-pauseBtn.addEventListener('click', () => setPaused(loop.isRunning));
-
-// タブ非表示時は自動で一時停止（復帰で再開）
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) loop.stop();
+// ポーズ切替をストア主導に
+ui.pauseBtn.addEventListener('click', () => {
+  store.setPaused(!store.getState().paused);
+  if (store.getState().paused) loop.stop();
   else loop.start();
+});
+
+// タブ非表示/復帰
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    store.setPaused(true);
+    loop.stop();
+  } else {
+    store.setPaused(false);
+    loop.start();
+  }
 });
 
 // 初期表示
