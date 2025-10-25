@@ -4,7 +4,7 @@ import { createStore, HIDDEN_ROWS } from './core/store';
 import type { Store } from './core/store';
 import type { Mino } from './core/types';
 import { spawnPiece, collides, shapeAt } from './core/srs';
-import { tryMove, tryRotate } from './core/collision';
+import { tryMove, tryRotateSRS } from './core/collision';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -347,7 +347,7 @@ if (import.meta.env.DEV) {
   window.rotCW = () => {
     const s = store.getState();
     if (!s.active) return;
-    const np = tryRotate(s.board, s.active, 'cw');
+    const np = tryRotateSRS(s.board, s.active, 'cw');
     if (np) store.setActive(np);
   };
 
@@ -368,7 +368,7 @@ if (import.meta.env.DEV) {
       if (np) store.setActive(np);
     }
     if (k === 'x') {
-      const np = tryRotate(s.board, s.active, 'cw');
+      const np = tryRotateSRS(s.board, s.active, 'cw');
       if (np) store.setActive(np);
     }
   });
