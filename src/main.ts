@@ -2,6 +2,7 @@ import './style.css';
 import { GameLoop } from './core/loop';
 import { createStore } from './core/store';
 import type { Mino } from './core/types';
+import { spawnPiece, collides } from './core/srs';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -217,6 +218,27 @@ store.subscribe((s) => {
     drawNextBox(ui.nextCanvases[i], s.nextQueue[i]);
   }
 });
+
+// ----- スポーン（NEXT -> active） -----
+function spawnFromNext() {
+  // すでに操作中ピースがあるなら何もしない
+  if (store.getState().active) return;
+
+  const type = store.consumeNext(); // 先頭を取得（末尾は自動補充）
+  const piece = spawnPiece(type);
+  const board = store.getState().board;
+
+  if (collides(board, piece)) {
+    store.setOver(true);
+    store.setPaused(true);
+    loop.stop();
+    return;
+  }
+  store.setActive(piece);
+}
+
+// 起動時に1回スポーン
+spawnFromNext();
 
 // --- ゲームループ（固定タイムステップ） ---
 function update(_dt: number) {
