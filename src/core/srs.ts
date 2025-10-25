@@ -61,14 +61,42 @@ export function spawnPiece(type: Mino): ActivePiece {
   return { type, x, y, rot: 0 };
 }
 
-/** rot=0 の形状を走査して、盤面上の座標でコールバック */
-export function forEachCellAt(piece: ActivePiece, fn: (gx: number, gy: number) => void) {
-  const shape = SHAPES[piece.type];
-  for (let y = 0; y < 4; y++) {
-    for (let x = 0; x < 4; x++) {
-      if (shape[y][x]) fn(piece.x + x, piece.y + y);
+/** rot（0..3, 時計回り）に応じた 4x4 形状を返す */
+export function shapeAt(type: Mino, rot: 0 | 1 | 2 | 3): number[][] {
+  const base = SHAPES[type];
+  if (rot === 0) return base;
+
+  // 4x4 の 90°時計回り回転
+  const rotateCW = (a: number[][]): number[][] => {
+    const b = [
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ];
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        b[x][3 - y] = a[y][x];
+      }
     }
+    return b;
+  };
+
+  let cur = base;
+  for (let i = 0; i < rot; i++) {
+    cur = rotateCW(cur);
   }
+  return cur;
+}
+
+/** rot を考慮して盤面座標で occupied セルを走査 */
+export function forEachCellAt(piece: ActivePiece, fn: (gx: number, gy: number) => void) {
+  const shape = shapeAt(piece.type, piece.rot);
+  for (let y = 0; y < 4; y++)
+    for (let x = 0; x < 4; x++) {
+      if (!shape[y][x]) continue;
+      fn(piece.x + x, piece.y + y);
+    }
 }
 
 /** 盤面外 or 既存ブロックに当たるなら true */
