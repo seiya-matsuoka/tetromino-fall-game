@@ -1,8 +1,10 @@
 import './style.css';
 import { GameLoop } from './core/loop';
-import { createStore } from './core/store';
+import { createStore, HIDDEN_ROWS } from './core/store';
+import type { Store } from './core/store';
 import type { Mino } from './core/types';
-import { spawnPiece, collides } from './core/srs';
+import { spawnPiece, collides, shapeAt } from './core/srs';
+import { tryMove, tryRotate } from './core/collision';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -55,6 +57,42 @@ function drawGrid() {
     ctx.lineTo(COLS * cell, y);
     ctx.stroke();
   }
+}
+
+const PIECE_COLORS: Record<Mino, string> = {
+  I: '#22d3ee', // cyan
+  O: '#facc15', // yellow
+  T: '#a78bfa', // purple
+  L: '#fb923c', // orange
+  J: '#60a5fa', // blue
+  S: '#34d399', // green
+  Z: '#f87171', // red
+};
+
+function drawActive() {
+  const s = store.getState();
+  const p = s.active;
+  if (!p) return;
+
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  const cell = Math.min(w / COLS, h / VISIBLE_ROWS);
+  const shape = shapeAt(p.type, p.rot);
+  const c = ctx;
+
+  c.fillStyle = PIECE_COLORS[p.type];
+  for (let y = 0; y < 4; y++)
+    for (let x = 0; x < 4; x++) {
+      if (!shape[y][x]) continue;
+      const gy = p.y + y - HIDDEN_ROWS;
+      const gx = p.x + x;
+      if (gy < 0 || gy >= VISIBLE_ROWS || gx < 0 || gx >= COLS) continue; // 画面外は描かない
+      const px = gx * cell;
+      const py = gy * cell;
+      const r = Math.max(2, Math.floor(cell * 0.15));
+      roundRect(ctx, px + 0.5, py + 0.5, cell - 1, cell - 1, r);
+      ctx.fill();
+    }
 }
 
 // ----- ストア -----
@@ -121,16 +159,6 @@ const SHAPES: Record<Mino, number[][]> = {
   ],
 };
 
-const COLORS: Record<Mino, string> = {
-  I: '#22d3ee', // cyan
-  O: '#facc15', // yellow
-  T: '#a78bfa', // purple
-  L: '#fb923c', // orange
-  J: '#60a5fa', // blue
-  S: '#34d399', // green
-  Z: '#f87171', // red
-};
-
 function drawNextBox(cv: HTMLCanvasElement, type: Mino | undefined) {
   // ディスプレイ倍率に対応
   const dpr = window.devicePixelRatio || 1;
@@ -178,7 +206,7 @@ function drawNextBox(cv: HTMLCanvasElement, type: Mino | undefined) {
   const offsetY = padding + Math.floor((4 - hCells) * 0.5) * cell - minY * cell;
 
   // 角丸の四角で各セルを描く
-  c.fillStyle = COLORS[type];
+  c.fillStyle = PIECE_COLORS[type];
   for (let y = 0; y < 4; y++)
     for (let x = 0; x < 4; x++) {
       if (!shape[y][x]) continue;
@@ -246,8 +274,8 @@ function update(_dt: number) {
 }
 
 function render(_alpha: number) {
-  // レンダリングは毎フレーム1回
   drawGrid();
+  drawActive();
 }
 
 const loop = new GameLoop(update, render, 1 / 60);
@@ -283,3 +311,65 @@ window.addEventListener('resize', () => {
 resizeCanvasToWrapper();
 drawGrid(); // 起動フレーム（ループ開始前の1描画）
 loop.start(); // ループ開始
+
+// --- 開発用：コンソール/キーから試す用 ---
+declare global {
+  interface Window {
+    store: Store;
+    moveL: () => void;
+    moveR: () => void;
+    moveD: () => void;
+    rotCW: () => void;
+    spawnFromNext?: () => void;
+  }
+}
+
+if (import.meta.env.DEV) {
+  window.store = store;
+  window.moveL = () => {
+    const s = store.getState();
+    if (!s.active) return;
+    const np = tryMove(s.board, s.active, -1, 0);
+    if (np) store.setActive(np);
+  };
+  window.moveR = () => {
+    const s = store.getState();
+    if (!s.active) return;
+    const np = tryMove(s.board, s.active, 1, 0);
+    if (np) store.setActive(np);
+  };
+  window.moveD = () => {
+    const s = store.getState();
+    if (!s.active) return;
+    const np = tryMove(s.board, s.active, 0, 1);
+    if (np) store.setActive(np);
+  };
+  window.rotCW = () => {
+    const s = store.getState();
+    if (!s.active) return;
+    const np = tryRotate(s.board, s.active, 'cw');
+    if (np) store.setActive(np);
+  };
+
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    const s = store.getState();
+    if (!s.active) return;
+    if (k === 'arrowleft') {
+      const np = tryMove(s.board, s.active, -1, 0);
+      if (np) store.setActive(np);
+    }
+    if (k === 'arrowright') {
+      const np = tryMove(s.board, s.active, 1, 0);
+      if (np) store.setActive(np);
+    }
+    if (k === 'arrowdown') {
+      const np = tryMove(s.board, s.active, 0, 1);
+      if (np) store.setActive(np);
+    }
+    if (k === 'x') {
+      const np = tryRotate(s.board, s.active, 'cw');
+      if (np) store.setActive(np);
+    }
+  });
+}
