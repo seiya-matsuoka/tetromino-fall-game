@@ -65,6 +65,8 @@ export interface Store {
   setLines(v: number): void;
   addLines(delta: number): void;
 
+  setBoard(board: Cell[][]): void;
+
   setActive(piece: ActivePiece | null): void;
 
   // NEXT（7バッグ連動）
@@ -176,6 +178,11 @@ export function createStore(): Store {
     addLines(delta) {
       if (delta === 0) return;
       api.setLines(state.lines + delta);
+    },
+
+    setBoard(board) {
+      state = { ...state, board };
+      emit();
     },
 
     setActive(piece) {
