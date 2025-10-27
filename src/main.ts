@@ -4,7 +4,7 @@ import { createStore, HIDDEN_ROWS } from './core/store';
 import type { Store } from './core/store';
 import type { Mino } from './core/types';
 import { spawnPiece, collides, shapeAt } from './core/srs';
-import { tryMove, tryRotateSRS } from './core/collision';
+import { isGrounded, tryMove, tryRotateSRS } from './core/collision';
 
 const canvas = document.getElementById('board') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -97,6 +97,8 @@ function drawActive() {
 
 // ----- ストア -----
 const store = createStore();
+
+spawnFromNext();
 
 // UI反映：スコア/レベル
 const ui = {
@@ -268,9 +270,163 @@ function spawnFromNext() {
 // 起動時に1回スポーン
 spawnFromNext();
 
+let fallTimerMs = 0; // 一定時間たったら1マス落とす
+let lockTimerMs = 0; // 接地後にカウントするロック遅延
+let wasGrounded = false; // 前フレームで接地してたか
+let lastGroundSig: string | null = null; // 接地中の位置/回転のスナップショット
+
+const GRAVITY_TABLE_MS: number[] = [
+  0,
+  1000, // level 1
+  793, // level 2
+  618, // level 3
+  473, // level 4
+  355, // level 5
+  262, // level 6
+  190, // level 7
+  135, // level 8
+  94, // level 9
+  64, // level10
+  43, // level11
+  28, // level12
+  18, // level13
+  11, // level14
+  7, // level15
+  4, // level16
+  3, // level17
+  2, // level18
+  1, // level19
+  1, // level20以降も1ms扱い
+];
+
+// レベル→落下間隔(ms)を返す小ヘルパ
+function getFallIntervalMs(level: number): number {
+  const idx = Math.min(Math.max(level, 1), 20);
+  return GRAVITY_TABLE_MS[idx];
+}
+
+function sigOf(piece: { x: number; y: number; rot: number }): string {
+  return `${piece.x},${piece.y},${piece.rot}`;
+}
+
+const LOCK_DELAY_MS = 500;
+
+// ミノの種類を board セル用の数値IDにするマップ
+const MINO_ID: Record<Mino, number> = {
+  I: 1,
+  O: 2,
+  T: 3,
+  L: 4,
+  J: 5,
+  S: 6,
+  Z: 7,
+};
+
+function fixActiveIntoBoard() {
+  const s = store.getState();
+  const p = s.active;
+  if (!p) return;
+
+  // boardをディープコピー（行ごとコピーで十分）
+  const newBoard = s.board.map((row) => [...row]);
+
+  const shape = shapeAt(p.type, p.rot);
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 4; x++) {
+      if (!shape[y][x]) continue;
+
+      const gx = p.x + x;
+      const gy = p.y + y;
+
+      // 盤面範囲チェック
+      if (gy < 0 || gy >= newBoard.length) continue;
+      if (gx < 0 || gx >= newBoard[0].length) continue;
+
+      newBoard[gy][gx] = MINO_ID[p.type];
+    }
+  }
+
+  // 盤面とアクティブピースを更新
+  store.setBoard(newBoard);
+  store.setActive(null);
+}
+
 // --- ゲームループ（固定タイムステップ） ---
-function update(_dt: number) {
-  // まだゲームロジックなし
+function update(dtSec: number) {
+  // ms に直す
+  const dtMs = dtSec * 1000;
+
+  const s = store.getState();
+
+  // ゲーム停止中なら何もしない
+  if (s.paused || s.over) return;
+
+  // アクティブピースがいないならスポーン試行して抜ける
+  if (!s.active) {
+    spawnFromNext();
+    // タイマー系リセット
+    fallTimerMs = 0;
+    lockTimerMs = 0;
+    wasGrounded = false;
+    lastGroundSig = null;
+    return;
+  }
+
+  const active = s.active;
+
+  // 接地してるか
+  const grounded = isGrounded(s.board, active);
+
+  // 接地していないなら：重力落下タイマーを進める
+  if (!grounded) {
+    wasGrounded = false;
+    lockTimerMs = 0;
+    lastGroundSig = null;
+
+    // ms を足す
+    fallTimerMs += dtMs;
+
+    const fallInterval = getFallIntervalMs(s.level);
+    if (fallTimerMs >= fallInterval) {
+      // 1マス下に動けるか
+      const moved = tryMove(s.board, active, 0, 1);
+      if (moved) {
+        store.setActive(moved);
+      }
+      fallTimerMs = 0; // 次の落下カウントをリセット
+    }
+
+    return; // groundedでないならここまで
+  }
+
+  // groundedしてる場合（床/他ブロックの上に乗ってる）
+  if (!wasGrounded) {
+    // 接地した瞬間
+    wasGrounded = true;
+    lockTimerMs = 0;
+    lastGroundSig = sigOf(active);
+  } else {
+    // 接地継続中
+    const currentSig = sigOf(active);
+    if (currentSig !== lastGroundSig) {
+      // 接地中に動いた/回転したのでロック猶予をリセット
+      lockTimerMs = 0;
+      lastGroundSig = currentSig;
+    } else {
+      // 同じ場所で止まりっぱなし → ロックタイマー進行
+      lockTimerMs += dtMs; // msで加算
+    }
+  }
+
+  // ロックタイマーが閾値を超えたら固定処理
+  if (lockTimerMs >= LOCK_DELAY_MS) {
+    fixActiveIntoBoard(); // active=null
+    spawnFromNext(); // 次のピースをアクティブに
+    fallTimerMs = 0;
+    lockTimerMs = 0;
+    wasGrounded = false;
+    lastGroundSig = null;
+  }
 }
 
 function render(_alpha: number) {
