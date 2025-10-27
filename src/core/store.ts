@@ -177,7 +177,16 @@ export function createStore(): Store {
 
     addLines(delta) {
       if (delta === 0) return;
-      api.setLines(state.lines + delta);
+      const newLines = state.lines + delta;
+      // 0～9ライン -> L1, 10～19 -> L2, ... 上限L20
+      const newLevel = Math.min(20, Math.floor(newLines / 10) + 1);
+
+      state = {
+        ...state,
+        lines: newLines,
+        level: newLevel,
+      };
+      emit();
     },
 
     setBoard(board) {
