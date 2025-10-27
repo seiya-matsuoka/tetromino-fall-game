@@ -48,6 +48,15 @@ const MINO_ID: Record<Mino, number> = {
   Z: 7,
 };
 
+// ライン消去後の得点テーブル
+const SCORE_TABLE: Record<number, number> = {
+  0: 0,
+  1: 100,
+  2: 300,
+  3: 500,
+  4: 800,
+};
+
 // アクティブピースの位置+回転のシグネチャ：ロック遅延リセット用
 function sigOf(p: { x: number; y: number; rot: number }): string {
   return `${p.x},${p.y},${p.rot}`;
@@ -90,6 +99,18 @@ export function createGameplay(store: Store, stopLoop: () => void) {
     // 盤面を更新、アクティブピースは消す
     store.setBoard(afterClear);
     store.setActive(null);
+
+    // ライン消去数に応じてスコア加点
+    if (cleared > 0) {
+      // 1/2/3/4ライン消しに応じたスコア
+      const gain = SCORE_TABLE[cleared] ?? 0;
+      if (gain) {
+        store.addScore(gain);
+      }
+
+      // 累計ライン数を増やす
+      store.addLines(cleared);
+    }
   }
 
   // NEXTキューから1つ取り出してアクティブピースとして出す
