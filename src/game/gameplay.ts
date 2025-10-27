@@ -2,6 +2,7 @@ import { shapeAt, spawnPiece, collides } from '../core/srs';
 import { tryMove, isGrounded } from '../core/collision';
 import type { Store } from '../core/store';
 import type { Mino } from '../core/types';
+import { clearFullLines } from '../core/lines';
 
 // レベルごとの重力：何msで1マス落とすか
 const GRAVITY_TABLE_MS: number[] = [
@@ -67,7 +68,8 @@ export function createGameplay(store: Store, stopLoop: () => void) {
     const p = s.active;
     if (!p) return;
 
-    const newBoard = s.board.map((row) => [...row]);
+    // boardをディープコピー（行ごとコピー）
+    const workingBoard = s.board.map((row) => [...row]);
     const shape = shapeAt(p.type, p.rot);
 
     for (let y = 0; y < 4; y++) {
@@ -75,13 +77,18 @@ export function createGameplay(store: Store, stopLoop: () => void) {
         if (!shape[y][x]) continue;
         const gx = p.x + x;
         const gy = p.y + y;
-        if (gy < 0 || gy >= newBoard.length) continue;
-        if (gx < 0 || gx >= newBoard[0].length) continue;
-        newBoard[gy][gx] = MINO_ID[p.type];
+        // 盤面内チェック
+        if (gy < 0 || gy >= workingBoard.length) continue;
+        if (gx < 0 || gx >= workingBoard[0].length) continue;
+        workingBoard[gy][gx] = MINO_ID[p.type];
       }
     }
 
-    store.setBoard(newBoard);
+    // ライン消去＆下詰め
+    const { board: afterClear, cleared } = clearFullLines(workingBoard);
+
+    // 盤面を更新、アクティブピースは消す
+    store.setBoard(afterClear);
     store.setActive(null);
   }
 
