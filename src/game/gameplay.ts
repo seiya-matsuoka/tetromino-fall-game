@@ -1,5 +1,5 @@
 import { shapeAt, spawnPiece, collides } from '../core/srs';
-import { tryMove, isGrounded } from '../core/collision';
+import { tryMove, isGrounded, tryRotateSRS } from '../core/collision';
 import type { Store } from '../core/store';
 import type { Mino } from '../core/types';
 import { clearFullLines } from '../core/lines';
@@ -210,9 +210,94 @@ export function createGameplay(store: Store, stopLoop: () => void) {
     }
   }
 
-  // 外から使いたいものを返す
+  // --- プレイヤー操作コマンド群 ---
+  // 外部から直接 board/state を扱わず、関数経由で動かす
+  function moveHorizontal(dx: -1 | 1) {
+    const s = store.getState();
+    if (s.paused || s.over || !s.active) return;
+    const moved = tryMove(s.board, s.active, dx, 0);
+    if (moved) {
+      store.setActive(moved);
+      // 接地中に動いた場合はロック遅延を伸ばすため、タイマー類もリセットする
+      wasGrounded = false;
+      lockTimerMs = 0;
+      lastGroundSig = null;
+    }
+  }
+
+  // ↓キーの1ステップだけ落とす
+  function softDropStep() {
+    const s = store.getState();
+    if (s.paused || s.over || !s.active) return;
+    const moved = tryMove(s.board, s.active, 0, 1);
+    if (moved) {
+      store.setActive(moved);
+      // 接地中に動いた場合はロック遅延を伸ばすため、タイマー類もリセットする
+      wasGrounded = false;
+      lockTimerMs = 0;
+      lastGroundSig = null;
+    }
+  }
+
+  // ↓長押しからのハードドロップ
+  function hardDrop() {
+    const s0 = store.getState();
+    if (s0.paused || s0.over || !s0.active) return;
+
+    let p = s0.active;
+    while (true) {
+      const moved = tryMove(s0.board, p, 0, 1);
+      if (!moved) break;
+      p = moved;
+    }
+
+    // 最終位置を反映
+    store.setActive(p);
+    // その位置で即固定＋次のピースを出す
+    fixActiveIntoBoard();
+    spawnFromNext();
+    // タイマー系リセット
+    fallTimerMs = 0;
+    lockTimerMs = 0;
+    wasGrounded = false;
+    lastGroundSig = null;
+  }
+
+  function rotateCW() {
+    const s = store.getState();
+    if (s.paused || s.over || !s.active) return;
+    const spun = tryRotateSRS(s.board, s.active, 'cw');
+    if (spun) {
+      store.setActive(spun);
+      wasGrounded = false;
+      lockTimerMs = 0;
+      lastGroundSig = null;
+    }
+  }
+
+  function rotateCCW() {
+    const s = store.getState();
+    if (s.paused || s.over || !s.active) return;
+    const spun = tryRotateSRS(s.board, s.active, 'ccw');
+    if (spun) {
+      store.setActive(spun);
+      wasGrounded = false;
+      lockTimerMs = 0;
+      lastGroundSig = null;
+    }
+  }
+
+  // 外から使うものを返す
   return {
     update,
     spawnFromNext,
+    actions: {
+      moveLeft: () => moveHorizontal(-1),
+      moveRight: () => moveHorizontal(1),
+      softDropStep,
+      hardDrop,
+      rotateCW,
+      rotateCCW,
+    },
   };
 }
