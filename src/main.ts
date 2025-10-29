@@ -64,10 +64,24 @@ loop.start();
 // --- ポーズ/再開トグル ---
 ui.pauseBtn.addEventListener('click', () => {
   const s = store.getState();
-  store.setPaused(!s.paused);
 
-  if (!store.getState().paused && !store.getState().over) {
+  // 1. ゲームオーバー後に押した場合はリスタート
+  if (s.over) {
+    // 全て初期状態に戻す
+    store.reset();
+    // reset() 直後は paused:true になっているため、動作モードにする
+    store.setPaused(false);
     loop.start();
+    return;
+  }
+
+  // 2. ポーズ⇄再開トグル
+  if (s.paused) {
+    store.setPaused(false);
+    loop.start();
+  } else {
+    store.setPaused(true);
+    loop.stop();
   }
 });
 
