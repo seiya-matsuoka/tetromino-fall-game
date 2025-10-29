@@ -23,6 +23,28 @@ export const ROWS = VISIBLE_ROWS + HIDDEN_ROWS;
 /** 1マスの値：0 は空。1..7 はミノID */
 export type Cell = 0 | number;
 
+/** localStorageに保存するハイスコアのキー */
+const HIGH_SCORE_KEY = 'tfg_highScore';
+
+function loadHighScoreFromStorage(): number {
+  try {
+    const raw = localStorage.getItem(HIGH_SCORE_KEY);
+    if (!raw) return 0;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveHighScoreToStorage(v: number) {
+  try {
+    localStorage.setItem(HIGH_SCORE_KEY, String(v));
+  } catch {
+    /* localStorageが使えない環境用 */
+  }
+}
+
 /** ゲーム状態の全体像 */
 export interface GameState {
   /** 盤面。配列は [row][col] でアクセス（0始まり） */
@@ -33,6 +55,8 @@ export interface GameState {
   nextQueue: Mino[];
   /** スコア */
   score: number;
+  /** ハイスコア */
+  highScore: number;
   /** 現在レベル */
   level: number;
   /** これまで消した合計ライン数 */
@@ -61,6 +85,8 @@ export interface Store {
   setScore(v: number): void;
   addScore(delta: number): void;
 
+  setHighScore(v: number): void;
+
   setLevel(v: number): void;
   setLines(v: number): void;
   addLines(delta: number): void;
@@ -82,12 +108,13 @@ function createEmptyBoard(): Cell[][] {
 }
 
 /** ゲーム開始状態を1か所に集約 */
-function initialState(): GameState {
+function initialState(highScoreSeed: number): GameState {
   return {
     board: createEmptyBoard(),
     active: null,
     nextQueue: [],
     score: 0,
+    highScore: highScoreSeed,
     level: 1,
     lines: 0,
     paused: true,
@@ -98,8 +125,11 @@ function initialState(): GameState {
 /* ---------- ストア本体 ---------- */
 
 export function createStore(): Store {
+  // ハイスコアを復元
+  const savedHigh = loadHighScoreFromStorage();
+
   // 現在の状態（常に最新のスナップショットを保持）
-  let state = initialState();
+  let state = initialState(savedHigh);
 
   const listeners = new Set<(s: Readonly<GameState>) => void>();
 
@@ -120,6 +150,14 @@ export function createStore(): Store {
     state = { ...state, nextQueue: [...state.nextQueue, ...add] };
   }
 
+  // ハイスコアのチェック
+  function checkHighScore(newScore: number) {
+    if (newScore > state.highScore) {
+      state = { ...state, highScore: newScore };
+      saveHighScoreToStorage(newScore);
+    }
+  }
+
   const api: Store = {
     getState: () => state,
 
@@ -130,7 +168,9 @@ export function createStore(): Store {
     },
 
     reset() {
-      state = initialState();
+      // ハイスコアは引き継ぐ
+      const keepHigh = state.highScore;
+      state = initialState(keepHigh);
       // リセット後もNEXTを3つにシード
       ensureNext(3);
       emit();
@@ -155,12 +195,21 @@ export function createStore(): Store {
     setScore(v) {
       if (state.score === v) return;
       state = { ...state, score: v };
+      // スコアセット時にもハイスコアチェック
+      checkHighScore(v);
       emit();
     },
 
     addScore(delta) {
       if (delta === 0) return;
       api.setScore(state.score + delta);
+    },
+
+    setHighScore(v) {
+      if (state.highScore === v) return;
+      state = { ...state, highScore: v };
+      saveHighScoreToStorage(v);
+      emit();
     },
 
     setLevel(v) {
