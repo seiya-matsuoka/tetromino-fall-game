@@ -223,6 +223,7 @@ function drawBoardLayer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
 function initHUD(
   store: Store,
   ui: {
+    highScore: HTMLElement;
     score: HTMLElement;
     level: HTMLElement;
     pauseBtn: HTMLElement;
@@ -230,6 +231,7 @@ function initHUD(
   }
 ) {
   store.subscribe((s) => {
+    ui.highScore.textContent = String(s.highScore);
     ui.score.textContent = String(s.score);
     ui.level.textContent = String(s.level);
     ui.pauseBtn.textContent = s.paused ? '▶' : '⏸';
@@ -248,6 +250,7 @@ export function createRenderer(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
   ui: {
+    highScore: HTMLElement;
     score: HTMLElement;
     level: HTMLElement;
     pauseBtn: HTMLElement;
