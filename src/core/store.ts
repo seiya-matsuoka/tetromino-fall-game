@@ -90,7 +90,7 @@ function initialState(): GameState {
     score: 0,
     level: 1,
     lines: 0,
-    paused: false,
+    paused: true,
     over: false,
   };
 }
