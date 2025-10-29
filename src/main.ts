@@ -3,7 +3,6 @@ import { GameLoop } from './core/loop';
 import { createStore } from './core/store';
 import { createGameplay } from './game/gameplay';
 import { createRenderer } from './game/render';
-import { tryMove, tryRotateSRS } from './core/collision';
 import { createInputController } from './core/input';
 
 const boardCanvas = document.getElementById('board') as HTMLCanvasElement;
@@ -96,76 +95,3 @@ document.addEventListener('visibilitychange', () => {
     }
   }
 });
-
-// TODO: 削除
-// --- 開発用：コンソール/キーから試す用 ---
-// declare global {
-//   interface Window {
-//     store: ReturnType<typeof createStore>;
-//     moveL: () => void;
-//     moveR: () => void;
-//     moveD: () => void;
-//     rotCW: () => void;
-//     rotCCW: () => void;
-//   }
-// }
-
-// if (import.meta.env.DEV) {
-//   window.store = store;
-//   window.moveL = () => {
-//     const s = store.getState();
-//     if (!s.active) return;
-//     const np = tryMove(s.board, s.active, -1, 0);
-//     if (np) store.setActive(np);
-//   };
-//   window.moveR = () => {
-//     const s = store.getState();
-//     if (!s.active) return;
-//     const np = tryMove(s.board, s.active, 1, 0);
-//     if (np) store.setActive(np);
-//   };
-//   window.moveD = () => {
-//     const s = store.getState();
-//     if (!s.active) return;
-//     const np = tryMove(s.board, s.active, 0, 1);
-//     if (np) store.setActive(np);
-//   };
-//   window.rotCW = () => {
-//     const s = store.getState();
-//     if (!s.active) return;
-//     const np = tryRotateSRS(s.board, s.active, 'cw');
-//     if (np) store.setActive(np);
-//   };
-//   window.rotCCW = () => {
-//     const s = store.getState();
-//     if (!s.active) return;
-//     const np = tryRotateSRS(s.board, s.active, 'ccw');
-//     if (np) store.setActive(np);
-//   };
-
-//   window.addEventListener('keydown', (e) => {
-//     const k = e.key.toLowerCase();
-//     const s = store.getState();
-//     if (!s.active) return;
-//     if (k === 'arrowleft') {
-//       const np = tryMove(s.board, s.active, -1, 0);
-//       if (np) store.setActive(np);
-//     }
-//     if (k === 'arrowright') {
-//       const np = tryMove(s.board, s.active, 1, 0);
-//       if (np) store.setActive(np);
-//     }
-//     if (k === 'arrowdown') {
-//       const np = tryMove(s.board, s.active, 0, 1);
-//       if (np) store.setActive(np);
-//     }
-//     if (k === 'x') {
-//       const np = tryRotateSRS(s.board, s.active, 'cw');
-//       if (np) store.setActive(np);
-//     }
-//     if (k === 'z') {
-//       const np = tryRotateSRS(s.board, s.active, 'ccw');
-//       if (np) store.setActive(np);
-//     }
-// });
-// }
