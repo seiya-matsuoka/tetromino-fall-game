@@ -1,7 +1,8 @@
 import type { Store } from '../core/store';
-import type { Mino } from '../core/types';
+import type { Mino, ActivePiece } from '../core/types';
 import { shapeAt } from '../core/srs';
 import { COLS, VISIBLE_ROWS, HIDDEN_ROWS } from '../core/store';
+import { tryMove } from '../core/collision';
 
 // ピースごとのカラー（UI表示用）
 const PIECE_COLORS: Record<Mino, string> = {
@@ -95,8 +96,24 @@ function drawNextBox(cv: HTMLCanvasElement, type: Mino | undefined) {
 }
 
 /**
+ * active ピースを落ちない高さまで下に落としたゴーストを返す
+ * - boardに固定されているブロックを考慮
+ * - tryMove() を1マスずつ使って落とせるところまで進める
+ */
+function computeGhostPiece(board: number[][], piece: ActivePiece): ActivePiece {
+  let ghost = { ...piece };
+  while (true) {
+    const moved = tryMove(board, ghost, 0, 1);
+    if (!moved) break; // これ以上は落ちない
+    ghost = moved;
+  }
+  return ghost;
+}
+
+/**
  * 盤面とアクティブピースをcanvasに描画する
  * - boardに固定済みのブロック
+ * - ゴースト（落下予定位置）
  * - activeピース（落下中のもの）
  * - グリッド線
  */
@@ -131,7 +148,36 @@ function drawBoardLayer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
     }
   }
 
-  // 2. アクティブピースを描画
+  // 2. ゴーストを描画
+  if (state.active) {
+    const active = state.active;
+    const ghost = computeGhostPiece(state.board, active);
+
+    const shapeGhost = shapeAt(active.type, ghost.rot);
+
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = PIECE_COLORS[active.type];
+
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        if (!shapeGhost[y][x]) continue;
+        const gy = ghost.y + y - HIDDEN_ROWS;
+        const gx = ghost.x + x;
+        if (gy < 0 || gy >= VISIBLE_ROWS) continue;
+        if (gx < 0 || gx >= COLS) continue;
+
+        const px = gx * cell;
+        const py = gy * cell;
+        const r = Math.max(2, Math.floor(cell * 0.15));
+        roundRect(ctx, px + 0.5, py + 0.5, cell - 1, cell - 1, r);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // 3. アクティブピースを描画
   if (state.active) {
     const p = state.active;
     const shape = shapeAt(p.type, p.rot);
@@ -154,7 +200,7 @@ function drawBoardLayer(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement
     }
   }
 
-  // 3. グリッド線を描画（見た目用）
+  // 4. グリッド線を描画（見た目用）
   ctx.strokeStyle = 'rgba(255,255,255,0.07)';
   ctx.lineWidth = 1;
   ctx.beginPath();
