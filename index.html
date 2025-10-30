@@ -27,6 +27,24 @@
         <aside class="bg-panel border-border flex flex-col items-center rounded-xl border p-2">
           <div class="text-muted text-xs">Level</div>
           <div id="level" class="text-xl font-semibold">1</div>
+
+          <!-- Level stack -->
+          <div id="levelStack" class="level-stack" role="img" aria-label="Current level (1–20)">
+            <div id="levelStackFill" class="level-stack__fill"></div>
+          </div>
+
+          <!-- Level gauge -->
+          <div id="levelGaugeLabel" class="level-gauge__label" aria-hidden="true">0/10</div>
+          <div
+            id="levelGauge"
+            class="level-gauge"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <div id="levelGaugeFill" class="level-gauge__fill"></div>
+          </div>
         </aside>
 
         <!-- 中央: ボード -->
