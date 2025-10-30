@@ -228,6 +228,11 @@ function initHUD(
     level: HTMLElement;
     pauseBtn: HTMLElement;
     nextCanvases: HTMLCanvasElement[];
+    levelStack: HTMLElement;
+    levelStackFill: HTMLElement;
+    levelGauge: HTMLElement;
+    levelGaugeFill: HTMLElement;
+    levelGaugeLabel: HTMLElement;
   }
 ) {
   store.subscribe((s) => {
@@ -238,6 +243,24 @@ function initHUD(
     for (let i = 0; i < ui.nextCanvases.length; i++) {
       drawNextBox(ui.nextCanvases[i], s.nextQueue[i]);
     }
+    // ---- Level stack ----
+    const levelClamped = Math.min(Math.max(s.level, 1), 20);
+    const levelPct = Math.round((levelClamped / 20) * 100);
+    ui.levelStackFill.style.height = `${levelPct}%`;
+    ui.levelStack.setAttribute('aria-label', `Level ${levelClamped} / 20`);
+
+    // ---- Level gauge ----
+    const linesInThisLevel = s.level >= 20 ? 10 : s.lines % 10;
+    const progress = s.level >= 20 ? 1 : linesInThisLevel / 10;
+    const pct = Math.round(progress * 100);
+
+    ui.levelGaugeFill.style.height = `${pct}%`;
+    ui.levelGauge.setAttribute('aria-valuenow', String(pct));
+
+    const text = s.level >= 20 ? 'MAX' : `${linesInThisLevel}/10`;
+    ui.levelGaugeLabel.textContent = text;
+    ui.levelGauge.setAttribute('aria-valuetext', text);
+    ui.levelGauge.title = text;
   });
 }
 
@@ -255,6 +278,11 @@ export function createRenderer(
     level: HTMLElement;
     pauseBtn: HTMLElement;
     nextCanvases: HTMLCanvasElement[];
+    levelStack: HTMLElement;
+    levelStackFill: HTMLElement;
+    levelGauge: HTMLElement;
+    levelGaugeFill: HTMLElement;
+    levelGaugeLabel: HTMLElement;
   }
 ) {
   // HUD購読を初期化（1回でOK）

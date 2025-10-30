@@ -18,6 +18,11 @@ const ui = {
     document.getElementById('next1') as HTMLCanvasElement,
     document.getElementById('next2') as HTMLCanvasElement,
   ],
+  levelStack: document.getElementById('levelStack') as HTMLElement,
+  levelStackFill: document.getElementById('levelStackFill') as HTMLElement,
+  levelGauge: document.getElementById('levelGauge') as HTMLElement,
+  levelGaugeFill: document.getElementById('levelGaugeFill') as HTMLElement,
+  levelGaugeLabel: document.getElementById('levelGaugeLabel') as HTMLElement,
 };
 
 // ストア作成
