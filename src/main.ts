@@ -4,6 +4,7 @@ import { createStore } from './core/store';
 import { createGameplay } from './game/gameplay';
 import { createRenderer } from './game/render';
 import { createInputController } from './core/input';
+import { setupControlsUI } from './core/controls';
 
 const boardCanvas = document.getElementById('board') as HTMLCanvasElement;
 const boardCtx = boardCanvas.getContext('2d')!;
@@ -44,6 +45,8 @@ const renderer = createRenderer(store, boardCanvas, boardCtx, ui);
 
 // キーボード入力コントローラ
 const inputController = createInputController(store, gameplay);
+
+setupControlsUI(inputController);
 
 // GameLoopを用意
 loop = new GameLoop(
