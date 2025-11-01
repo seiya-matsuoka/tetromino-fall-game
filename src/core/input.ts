@@ -12,16 +12,17 @@ interface GameplayControls {
   };
 }
 
-// 画面ボタン用に公開するコントローラ型
+// 可視状態の型
+export type VisualState = { left: boolean; right: boolean; down: boolean; rot: boolean };
+export type VisualListener = (s: VisualState) => void;
+
 export type InputController = {
   update: (dtMs: number) => void;
   dispose: () => void;
   setHold: (key: 'left' | 'right' | 'down', pressed: boolean) => void;
   tapRotate: () => void;
+  setVisualListener: (fn: VisualListener | null) => void;
 };
-
-// UI可視状態コールバックの型
-type VisualListener = (s: { left: boolean; right: boolean; down: boolean; rot: boolean }) => void;
 
 // 長押しなどの閾値(ms)
 const HOLD_ROTATE_CCW_MS = 350;
