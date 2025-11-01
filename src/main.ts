@@ -45,6 +45,58 @@ const renderer = createRenderer(store, boardCanvas, boardCtx, ui);
 // キーボード入力コントローラ
 const inputController = createInputController(store, gameplay);
 
+// 画面ボタン接続
+function bindHoldButton(el: HTMLElement, key: 'left' | 'right' | 'down') {
+  const down = (e: Event) => {
+    e.preventDefault();
+    el.classList.add('is-active');
+    inputController.setHold(key, true);
+  };
+  const up = (e: Event) => {
+    e.preventDefault();
+    el.classList.remove('is-active');
+    inputController.setHold(key, false);
+  };
+
+  el.addEventListener('pointerdown', down, { passive: false });
+  el.addEventListener('pointerup', up, { passive: false });
+  el.addEventListener('pointercancel', up, { passive: false });
+  el.addEventListener('pointerleave', up, { passive: false });
+}
+
+function bindTapButton(el: HTMLElement, onTap: () => void) {
+  const press = (e: Event) => {
+    e.preventDefault();
+    el.classList.add('is-active');
+    onTap();
+  };
+  const release = (e: Event) => {
+    e.preventDefault();
+    el.classList.remove('is-active');
+  };
+  el.addEventListener('pointerdown', press, { passive: false });
+  el.addEventListener('pointerup', release, { passive: false });
+  el.addEventListener('pointercancel', release, { passive: false });
+  el.addEventListener('pointerleave', release, { passive: false });
+}
+
+const btnLeft = document.getElementById('btn-left');
+const btnRight = document.getElementById('btn-right');
+const btnDown = document.getElementById('btn-down');
+const btnRot = document.getElementById('btn-rot');
+
+if (btnLeft) bindHoldButton(btnLeft, 'left');
+if (btnRight) bindHoldButton(btnRight, 'right');
+if (btnDown) bindHoldButton(btnDown, 'down');
+if (btnRot) bindTapButton(btnRot, () => inputController.tapRotate());
+
+inputController.setVisualListener((v) => {
+  if (btnLeft) btnLeft.classList.toggle('is-active', v.left);
+  if (btnRight) btnRight.classList.toggle('is-active', v.right);
+  if (btnDown) btnDown.classList.toggle('is-active', v.down);
+  if (btnRot) btnRot.classList.toggle('is-active', v.rot);
+});
+
 // GameLoopを用意
 loop = new GameLoop(
   (dtSec) => {

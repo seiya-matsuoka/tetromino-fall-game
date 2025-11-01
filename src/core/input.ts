@@ -12,6 +12,17 @@ interface GameplayControls {
   };
 }
 
+// 画面ボタン用に公開するコントローラ型
+export type InputController = {
+  update: (dtMs: number) => void;
+  dispose: () => void;
+  setHold: (key: 'left' | 'right' | 'down', pressed: boolean) => void;
+  tapRotate: () => void;
+};
+
+// UI可視状態コールバックの型
+type VisualListener = (s: { left: boolean; right: boolean; down: boolean; rot: boolean }) => void;
+
 // 長押しなどの閾値(ms)
 const HOLD_ROTATE_CCW_MS = 350;
 const HOLD_HARDDROP_MS = 350;
@@ -29,6 +40,19 @@ export function createInputController(store: Store, gameplay: GameplayControls) 
     down: { down: false, holdMs: 0, repeatMs: 0, hardDropped: false },
     rot: { down: false, holdMs: 0, firedCW: false, firedCCW: false },
   };
+
+  // 画面ボタンの状態
+  const vk = { left: false, right: false, down: false };
+
+  // 合成状態の立ち上がり検出用
+  let prev = { left: false, right: false, down: false };
+
+  let visual: VisualListener | null = null;
+
+  // 公開API
+  function setVisualListener(fn: VisualListener | null) {
+    visual = fn;
+  }
 
   function onKeyDown(e: KeyboardEvent) {
     const st = store.getState();
@@ -102,21 +126,71 @@ export function createInputController(store: Store, gameplay: GameplayControls) 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
 
+  // 画面ボタンから使う関数
+  function setHold(key: 'left' | 'right' | 'down', pressed: boolean) {
+    vk[key] = pressed;
+    if (pressed) {
+      if (key === 'left') {
+        keyState.left.holdMs = 0;
+        keyState.left.repeatMs = 0;
+        keyState.left.firstShotDone = false;
+      } else if (key === 'right') {
+        keyState.right.holdMs = 0;
+        keyState.right.repeatMs = 0;
+        keyState.right.firstShotDone = false;
+      } else if (key === 'down') {
+        keyState.down.holdMs = 0;
+        keyState.down.repeatMs = 0;
+        keyState.down.hardDropped = false;
+      }
+    }
+  }
+
+  function tapRotate() {
+    const s = store.getState();
+    if (s.paused || s.over || !s.active) return;
+    gameplay.actions.rotateCW();
+  }
+
   // 毎フレーム呼ぶ
   function update(dtMs: number) {
     const st = store.getState();
     if (st.paused || st.over) return;
 
+    // キーボード or 画面ボタン
+    const active = {
+      left: keyState.left.down || vk.left,
+      right: keyState.right.down || vk.right,
+      down: keyState.down.down || vk.down,
+    };
+
+    // 立ち上がりで初期化
+    if (active.left && !prev.left) {
+      keyState.left.holdMs = 0;
+      keyState.left.repeatMs = 0;
+      keyState.left.firstShotDone = false;
+    }
+    if (active.right && !prev.right) {
+      keyState.right.holdMs = 0;
+      keyState.right.repeatMs = 0;
+      keyState.right.firstShotDone = false;
+    }
+    if (active.down && !prev.down) {
+      keyState.down.holdMs = 0;
+      keyState.down.repeatMs = 0;
+      keyState.down.hardDropped = false;
+    }
+
     // 経過時間
-    if (keyState.left.down) {
+    if (active.left) {
       keyState.left.holdMs += dtMs;
       keyState.left.repeatMs += dtMs;
     }
-    if (keyState.right.down) {
+    if (active.right) {
       keyState.right.holdMs += dtMs;
       keyState.right.repeatMs += dtMs;
     }
-    if (keyState.down.down) {
+    if (active.down) {
       keyState.down.holdMs += dtMs;
       keyState.down.repeatMs += dtMs;
     }
@@ -128,7 +202,7 @@ export function createInputController(store: Store, gameplay: GameplayControls) 
     const commands: Array<() => void> = [];
 
     // ←
-    if (keyState.left.down) {
+    if (active.left) {
       if (!keyState.left.firstShotDone) {
         commands.push(() => gameplay.actions.moveLeft());
         keyState.left.firstShotDone = true;
@@ -144,7 +218,7 @@ export function createInputController(store: Store, gameplay: GameplayControls) 
     }
 
     // →
-    if (keyState.right.down) {
+    if (active.right) {
       if (!keyState.right.firstShotDone) {
         commands.push(() => gameplay.actions.moveRight());
         keyState.right.firstShotDone = true;
@@ -173,7 +247,7 @@ export function createInputController(store: Store, gameplay: GameplayControls) 
 
     // ↓（ソフトドロップ / ハードドロップ）
     // 押している間: softDropStep & ホールド: hardDropを一回だけ
-    if (keyState.down.down) {
+    if (active.down) {
       if (!keyState.down.hardDropped && keyState.down.holdMs >= HOLD_HARDDROP_MS) {
         commands.push(() => gameplay.actions.hardDrop());
         keyState.down.hardDropped = true;
@@ -189,6 +263,19 @@ export function createInputController(store: Store, gameplay: GameplayControls) 
     for (const fn of commands) {
       fn();
     }
+
+    // 次フレーム用
+    prev = active;
+
+    // 毎フレーム通知
+    if (visual) {
+      visual({
+        left: active.left,
+        right: active.right,
+        down: active.down,
+        rot: keyState.rot.down,
+      });
+    }
   }
 
   function dispose() {
@@ -196,5 +283,5 @@ export function createInputController(store: Store, gameplay: GameplayControls) 
     window.removeEventListener('keyup', onKeyUp);
   }
 
-  return { update, dispose };
+  return { update, dispose, setHold, tapRotate, setVisualListener };
 }
