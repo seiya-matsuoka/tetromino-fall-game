@@ -10,13 +10,13 @@
     <div id="app" class="mx-auto w-full max-w-[440px] p-3">
       <!-- トップバー -->
       <header class="flex items-center justify-between">
-        <div class="leading-tight">
+        <div class="text-center leading-tight">
           <div class="text-muted text-xs">HIGH SCORE</div>
-          <div id="highScore" class="font-semibold">0</div>
+          <div id="highScore" class="num font-semibold">0</div>
         </div>
         <div class="text-center">
           <div class="text-muted text-xs tracking-wide uppercase">score</div>
-          <div id="score" class="text-2xl font-bold">0</div>
+          <div id="score" class="num text-2xl font-bold">0</div>
         </div>
         <button
           id="pauseBtn"
@@ -29,7 +29,9 @@
       <!-- メインエリア -->
       <main class="mt-3 grid grid-cols-[64px_minmax(0,1fr)_88px] gap-2">
         <!-- 左: Level -->
-        <aside class="bg-panel border-border flex flex-col items-center rounded-xl border p-2">
+        <aside
+          class="bg-panel border-border flex flex-col items-center gap-3 rounded-xl border p-2"
+        >
           <div class="text-muted text-xs">Level</div>
           <div id="level" class="text-xl font-semibold">1</div>
 
@@ -39,16 +41,18 @@
           </div>
 
           <!-- Level gauge -->
-          <div id="levelGaugeLabel" class="level-gauge__label" aria-hidden="true">0/10</div>
-          <div
-            id="levelGauge"
-            class="level-gauge"
-            role="progressbar"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="0"
-          >
-            <div id="levelGaugeFill" class="level-gauge__fill"></div>
+          <div class="level-gauge-wrap">
+            <div id="levelGaugeLabel" class="level-gauge__label" aria-hidden="true">0/10</div>
+            <div
+              id="levelGauge"
+              class="level-gauge"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <div id="levelGaugeFill" class="level-gauge__fill"></div>
+            </div>
           </div>
         </aside>
 
@@ -66,15 +70,15 @@
           <div class="mt-2 grid gap-2">
             <canvas
               id="next0"
-              class="bg-surface border-border h-16 w-full rounded-lg border"
+              class="bg-surface border-border aspect-square w-full rounded-lg border"
             ></canvas>
             <canvas
               id="next1"
-              class="bg-surface border-border h-16 w-full rounded-lg border"
+              class="bg-surface border-border aspect-square w-full rounded-lg border"
             ></canvas>
             <canvas
               id="next2"
-              class="bg-surface border-border h-16 w-full rounded-lg border"
+              class="bg-surface border-border aspect-square w-full rounded-lg border"
             ></canvas>
           </div>
         </aside>

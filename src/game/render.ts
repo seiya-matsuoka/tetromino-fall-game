@@ -50,7 +50,11 @@ function roundRect(
 function drawNextBox(cv: HTMLCanvasElement, type: Mino | undefined) {
   const dpr = window.devicePixelRatio || 1;
   const rect = cv.getBoundingClientRect();
-  const css = Math.min(Math.floor(rect.width), Math.floor(rect.height));
+
+  // サイズ0なら何もしない
+  const css = Math.floor(Math.min(rect.width || 0, rect.height || 0));
+  if (css <= 0) return;
+
   cv.style.width = `${css}px`;
   cv.style.height = `${css}px`;
   cv.width = Math.floor(css * dpr);
@@ -287,6 +291,30 @@ export function createRenderer(
 ) {
   // HUD購読を初期化（1回でOK）
   initHUD(store, ui);
+
+  const nextCanvases = ui.nextCanvases;
+  const ro = new ResizeObserver(() => {
+    // NEXT をサイズ確定後に再描画
+    const s = store.getState();
+    for (let i = 0; i < nextCanvases.length; i++) {
+      drawNextBox(nextCanvases[i], s.nextQueue[i]);
+    }
+    // 盤面もリサイズに追従
+    drawBoardLayer(ctx, canvas, store);
+  });
+
+  // ボード領域とNEXTキャンバスを監視
+  ro.observe(canvas.parentElement ?? canvas);
+  nextCanvases.forEach((cv) => ro.observe(cv));
+
+  //レイアウト確定後にももう一度描画
+  requestAnimationFrame(() => {
+    const s = store.getState();
+    for (let i = 0; i < nextCanvases.length; i++) {
+      drawNextBox(nextCanvases[i], s.nextQueue[i]);
+    }
+    drawBoardLayer(ctx, canvas, store);
+  });
 
   function render(_alpha: number) {
     // alphaは今は未使用
