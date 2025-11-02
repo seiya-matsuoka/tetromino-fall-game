@@ -143,3 +143,137 @@ src/
 - GitHub Actions（`deploy.yml`）が `main` への push で自動デプロイ
 
   [![Deploy to GitHub Pages](https://github.com/seiya-matsuoka/tetromino-fall-game/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/seiya-matsuoka/tetromino-fall-game/actions/workflows/deploy.yml)
+
+## 実装メモ
+
+### 1. ゲームループ図
+
+```bash
+index.html  ──>  main.ts  ─────────────┐
+                    │                  │
+                    │                  │
+                    ▼                  │
+              createStore()            │         Store.subscribe(...)
+                    │                  │                 ▲
+                    │                  │                 │
+         createGameplay(store, stop)   │                 │
+                    │                  │                 │
+            createRenderer(store, ctx) │                 │
+                    │                  │                 │
+            createInputController(...) │                 │
+                    │                  │                 │
+                    ▼                  │                 │
+                 GameLoop  ────────────┴──────────── render(alpha)
+                  update(dt)                         (Canvas描画)
+                      ├─ inputController.update(dtMs)
+                      └─ gameplay.update(dtSec)
+
+```
+
+---
+
+### 2. ゲームループのフロー（一巡）
+
+1. `GameLoop` が一定間隔で `update(dt)` → `render(alpha)` を呼ぶ
+2. `gameplay.update()` が進行（重力・NEXT供給・ライン消去・スコア/レベル更新など）
+3. `store` に結果を書き込む
+4. `store.subscribe(...)` を通じて HUD（スコア/レベル/NEXT 表示） が自動反映
+5. `renderer.render()` が盤面とアクティブピース、ゴースト、グリッド線を描画
+6. キーボード/画面ボタン → `inputController` が `gameplay.actions` を呼び、次フレームの `update()` で反映
+
+---
+
+### 3. フレームの流れ（空中 → 接地 → 固定）
+
+1. `inputController.update(dtMs)`
+   - 押下/長押しに応じて `gameplay.actions`（移動/回転/ドロップ）を発火候補に積む
+2. `gameplay.update(dtSec)`
+   - アクティブが無ければ `spawnFromNext()`
+   - `isGrounded` で接地チェック
+   - 空中：`fallTimerMs` >= `interval` で 1 マス落下
+   - 接地：動きが無ければ `lockTimerMs` を進め、閾値超で `fixActiveIntoBoard()` → `clearFullLines()` → `addScore`/`addLines` → `spawnFromNext()`
+3. `renderer.render(alpha)`
+   - `board` / `active` / ゴースト / グリッド を描画
+   - HUD は `store.subscribe` によって別途更新
+
+---
+
+### 4. モジュールの役割と関係
+
+| モジュール          | 主な役割                                                                                  | どこから使われるか                                                                               | 主な関数/エクスポート                                                   |
+| :------------------ | :---------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------- |
+| `core/store.ts`     | ゲーム状態。<br>`set*`/`add*`/`reset`/`seed`/`consumeNext` などのアクションを提供         | `main.ts`（組み立て）、`gameplay.ts`（進行で更新/参照）、`render.ts`（参照）、`input.ts`（参照） | `createStore()`（`getState`, `subscribe`, `set*`, `add*`, `consumeNext` |
+| `core/loop.ts`      | 固定タイムステップのゲームループ                                                          | `main.ts`                                                                                        | `GameLoop(start/stop, update, render, timestep)`                        |
+| `game/gameplay.ts`  | 進行ロジックの中心。重力・接地・ロック遅延・固定・ライン消去・スコア/レベル更新・スポーン | `main.ts`（`update` 呼び出し）、`input.ts`（`actions` 呼び出し）                                 | `createGameplay(store, stopLoop)` → `{ update, spawnFromNext }`         |
+| `game/render.ts`    | Canvas 描画と HUD 反映                                                                    | `main.ts`（`render` 呼び出し）                                                                   | `createRenderer(store, canvas, ctx, ui)` → `{ render }`                 |
+| `core/input.ts`     | キー/タッチ入力の集約とリピート制御                                                       | `main.ts`（生成）、`core/controls.ts`（可視化接続）                                              | `clearFullLines(board)`                                                 |
+| `core/controls.ts`  | 画面ボタン（←→↓⟳）と `inputController` の結線                                             | `main.ts`（接続）                                                                                | `setupControlsUI(inputController)`                                      |
+| `core/collision.ts` | 当たり判定・移動・回転のための補助                                                        | `gameplay.ts`, `main.ts`                                                                         | `tryMove`, `isGrounded`, `tryRotateSRS`                                 |
+| `core/lines.ts`     | ライン消去 & 下詰め                                                                       | `gameplay.ts`                                                                                    | `clearFullLines(board)`                                                 |
+| `core/srs.ts`       | スポーン位置/向き、各ミノの形状                                                           | `collision.ts`, `gameplay.ts`, `render.ts`                                                       | `spawnPiece`, `shapeAt`, `collides`                                     |
+| `core/sevenBag.ts`  | 7 バッグ生成                                                                              | `store.ts`（NEXT 補充）                                                                          | `SevenBag`                                                              |
+
+---
+
+### 5. データフロー（NEXT → スポーン → 固定 → 消去）
+
+1. NEXT 補充：`store.seedNext(count)` が `SevenBag` を用いてNEXTを満たす
+2. スポーン：`gameplay.spawnFromNext()` → `store.consumeNext()` → `spawnPiece(type)`
+   - スポーン位置で `collides` なら ゲームオーバー（`store.setOver(true)`）
+3. 固定：ロック遅延が満了すると `fixActiveIntoBoard()`
+4. ライン消去：`clearFullLines` → `n` 行消し
+   - `store.addScore(SCORE_TABLE[n])`
+   - `store.addLines(n)` → 10 ラインごとに自動 `level` アップ
+5. 次のピース：`spawnFromNext()` に戻る
+
+---
+
+### 6. gameplay メモ
+
+- 重力：レベルに応じた間隔で 1 マス落下（`GRAVITY_TABLE_MS` → `getFallIntervalMs()`）
+- 接地判定：`isGrounded(board, active)`
+- ロック遅延：接地中は静止が続いたときのみカウント。接地しながら移動/回転でリセット
+- 固定：一定時間停止 → `fixActiveIntoBoard()` → `clearFullLines()` → `addScore()` → `addLines()`
+- スポーン：`consumeNext()` → `spawnPiece(type)` → 衝突していれば Game Over（`stopLoop()`）
+
+内部的に保持する値：
+
+- `fallTimerMs` ：重力の経過時間
+- `lockTimerMs` ：接地後のロック遅延
+- `wasGrounded` / `lastGroundSig` ：接地継続と動作検出用
+
+---
+
+### 7. renderer メモ
+
+- Canvas 上に 固定ブロック / アクティブピース / ゴースト / グリッド線 を描画
+- HUD（スコア、レベル、NEXT、ゲージ）更新  
+  → `store.subscribe(...)` で変更時のみ DOM 反映
+
+---
+
+### 8. store メモ
+
+- ゲーム状態を保持（`board`, `active`, `nextQueue`, `score`, `level`, `lines`, `paused`, `over`）
+- `subscribe(fn)` で描画と同期
+- NEXT 供給：`seedNext(n)` / `consumeNext()`
+
+---
+
+### 9. core/ 配下の機能メモ
+
+- `collision.ts`
+  - `tryMove` ：左右移動・ソフトドロップ時の衝突なし移動確認
+  - `isGrounded` ：接地判定（1マス下に動けるか）
+  - `tryRotateSRS` ：回転
+- `srs.ts`
+  - `spawnPiece` ：ミノの出現位置/向きを決定
+  - `shapeAt` ：4x4 形状を返す
+  - `collides` ：衝突検査
+- `lines.ts`
+  - `clearFullLines(board)` ：行を削除して下詰めし、消去数を返す
+- `sevenBag.ts`
+  - 7 種のミノを 重複なしシャッフルで供給
+- `input.ts` & `controls.ts`
+  - キー/タッチを集約して、`gameplay.actions` を呼ぶ
+  - 画面ボタン（←→↓⟳）と可視状態（押下中のUI）の同期
